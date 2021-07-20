@@ -14,7 +14,7 @@ $longopts = [
 ];
 $options = getopt($shortopts, $longopts);
 
-if (array_key_exists('url', $options) && $options['url']) {
+if (is_array($options) && array_key_exists('url', $options) && $options['url']) {
     // Передан url в командной строке
     $channels = [
         [
