@@ -23,9 +23,12 @@ if (is_array($options) && array_key_exists('url', $options) && $options['url']) 
     ];
 }
 
+// Обход списка каналов для записи
 foreach ($channels as $channel) {
     try {
+        // Определить платформу канала
         $channel['platform'] = Recorder::getChannelPlatform($channel);
+        // Получить информацию о канале и стриме
         $channel = array_merge($channel, Recorder::getChannel($channel));
     } catch (Throwable $t) {
         $response['channels'][] = [
@@ -37,10 +40,13 @@ foreach ($channels as $channel) {
     }
 
     if ($channel['isLive']) {
+        // Проверить на уже начатую запись
         $isRecording = Recorder::isRecording($channel);
 
         if (!$isRecording) {
+            // Запись не была ранее
             $filePath = Recorder::prepareFilePath($channel);
+            // Запустить запись
             $command = Recorder::recordToFile($filePath, $channel);
         }
 
@@ -58,6 +64,12 @@ foreach ($channels as $channel) {
 echo json_encode($response, JSON_UNESCAPED_UNICODE);
 
 class Recorder {
+    /**
+     * Получить информацию о канале и стриме
+     *
+     * @param array $channel
+     * @return array $channel - Дополнительная информация
+     */
     static function getChannel($channel) {
         switch ($channel['platform']) {
             case CHANNEL_PLATFORM_YOUTUBE:
@@ -76,6 +88,12 @@ class Recorder {
         ];
     }
 
+    /**
+     * Определить платформу канала
+     *
+     * @param array $channel
+     * @return int $platform
+     */
     static function getChannelPlatform($channel) {
         if (stristr($channel['url'], 'youtube.com') || stristr($channel['url'], 'youtu.be')) {
             return CHANNEL_PLATFORM_YOUTUBE;
@@ -86,6 +104,12 @@ class Recorder {
         }
     }
 
+    /**
+     * Проверить онлайн стрима
+     * 
+     * @param array $channel
+     * @return boolean $isLive
+     */
     static function isLive($channel) {
         switch ($channel['platform']) {
             case CHANNEL_PLATFORM_YOUTUBE:
@@ -102,6 +126,12 @@ class Recorder {
         return $isLive;
     }
 
+    /**
+     * Получить HLS ссылку
+     *
+     * @param array $channel
+     * @return string $hlsUrl
+     */
     static function getHlsUrl($channel) {
         switch ($channel['platform']) {
             case CHANNEL_PLATFORM_YOUTUBE:
@@ -115,6 +145,12 @@ class Recorder {
         return $hlsUrl;
     }
 
+    /**
+     * Получить id стрима
+     *
+     * @param array $channel
+     * @return string $streamId
+     */
     static function getStreamId($channel) {
         switch ($channel['platform']) {
             case CHANNEL_PLATFORM_YOUTUBE:
@@ -128,6 +164,12 @@ class Recorder {
         return $streamId;
     }
 
+    /**
+     * Сформировать директорию и наименование файла (полный путь файла)
+     *
+     * @param array $channel
+     * @return string $filePath
+     */
     static function prepareFilePath($channel) {
         $fileDir = Recorder::prepareFileDir($channel);
         $fileName = Recorder::prepareFileName($channel);
@@ -136,6 +178,13 @@ class Recorder {
         return $filePath;
     }
 
+    /**
+     * Сформировать директорию файла
+     * - Создать структуру директории, если нету
+     *
+     * @param array $channel
+     * @return string $fileDir
+     */
     static function prepareFileDir($channel) {
         $fileDir = implode(DIRECTORY_SEPARATOR, [__DIR__, 'channels', $channel['channelName']]);
         if (!is_dir($fileDir)) {
@@ -144,6 +193,12 @@ class Recorder {
         return $fileDir;
     }
 
+    /**
+     * Сформировать наименование файла
+     *
+     * @param array $channel
+     * @return string $fileName
+     */
     static function prepareFileName($channel) {
         //$fileName = Recorder::filterFilename((new DateTime())->format('Y-m-d'));
         //$fileName = Recorder::filterFilename($channel['videoId']);
@@ -157,44 +212,53 @@ class Recorder {
 
     /**
      * Отфильтровать символы имени файла для файловой системы
+     * 
+     * @param string $fileName
+     * @param boolean $beautify - Сократить символы имени файла для файловой системы
+     * @return string $fileName
      */
-    static function filterFilename($filename, $beautify = true) {
-        // sanitize filename
-        $filename = preg_replace('/[^\w]/u', '-', $filename);
+    static function filterFilename($fileName, $beautify = true) {
+        // sanitize fileName
+        $fileName = preg_replace('/[^\w]/u', '-', $fileName);
         // avoids ".", ".." or ".hiddenFiles"
-        $filename = ltrim($filename, '.-');
+        $fileName = ltrim($fileName, '.-');
         // optional beautification
-        if ($beautify) $filename = Recorder::beautifyFilename($filename);
+        if ($beautify) {
+            $fileName = Recorder::beautifyFilename($fileName);
+        }
         // maximize filename length to 255 bytes http://serverfault.com/a/9548/44086
-        $ext = pathinfo($filename, PATHINFO_EXTENSION);
-        $filename = mb_strcut(pathinfo($filename, PATHINFO_FILENAME), 0, 255 - ($ext ? strlen($ext) + 1 : 0), mb_detect_encoding($filename)) . ($ext ? '.' . $ext : '');
-        return $filename;
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        $fileName = mb_strcut(pathinfo($fileName, PATHINFO_FILENAME), 0, 255 - ($ext ? strlen($ext) + 1 : 0), mb_detect_encoding($fileName)) . ($ext ? '.' . $ext : '');
+        return $fileName;
     }
     
     /**
      * Сократить символы имени файла для файловой системы
+     * 
+     * @param string $fileName
+     * @return string $fileName
      */
-    static function beautifyFilename($filename) {
+    static function beautifyFilename($fileName) {
         // reduce consecutive characters
-        $filename = preg_replace([
+        $fileName = preg_replace([
             // "file   name.zip" becomes "file-name.zip"
             '/ +/',
             // "file___name.zip" becomes "file-name.zip"
             '/_+/',
             // "file---name.zip" becomes "file-name.zip"
             '/-+/'
-        ], '-', $filename);
-        $filename = preg_replace([
+        ], '-', $fileName);
+        $fileName = preg_replace([
             // "file--.--.-.--name.zip" becomes "file.name.zip"
             '/-*\.-*/',
             // "file...name..zip" becomes "file.name.zip"
             '/\.{2,}/'
-        ], '.', $filename);
+        ], '.', $fileName);
         // lowercase for windows/unix interoperability http://support.microsoft.com/kb/100625
-        $filename = mb_strtolower($filename, mb_detect_encoding($filename));
+        $fileName = mb_strtolower($fileName, mb_detect_encoding($fileName));
         // ".file-name.-" becomes "file-name"
-        $filename = trim($filename, '.-');
-        return $filename;
+        $fileName = trim($fileName, '.-');
+        return $fileName;
     }
 
     /**
@@ -208,6 +272,12 @@ class Recorder {
         return 'ts';
     }
 
+    /**
+     * Проверить на уже начатую запись
+     *
+     * @param array $channel
+     * @return boolean $isRecording
+     */
     static function isRecording($channel) {
         // Имя файла для запуска записи
         $pid = $channel['streamId'];
@@ -225,6 +295,7 @@ class Recorder {
      *
      * @param string $filePath
      * @param array $channel
+     * @param array $options
      * @return string $command
      */
     static function recordToFile($filePath, $channel, $options = null) {
@@ -267,6 +338,13 @@ class Recorder {
 }
 
 class Youtube {
+    /**
+     * Получить информацию о канале и стриме
+     * - 2 способа получения данных
+     *
+     * @param array $channel
+     * @return array $channel - Дополнительная информация
+     */
     static function getChannel($channel) {
         $channel['channelName'] = end(explode('/', $channel['url']));
 
@@ -281,7 +359,7 @@ class Youtube {
             $channel['streamId'] = (isset($matches[1]) && $matches[1] !== 'live_stream') ? $matches[1] : '';
             $channel['hlsUrl'] = $channel['isLive'] ? Youtube::getHlsUrl($channel) : '';
         } else {
-            // Альтернативно
+            // Альтернативный способ
             $channel['isLive'] = Youtube::isLive($channel);
             $channel['streamId'] = Youtube::getVideoId($channel);
             $channel['hlsUrl'] = Youtube::getHlsUrl($channel);
@@ -295,6 +373,14 @@ class Youtube {
         ];
     }
 
+    
+    /**
+     * Проверить онлайн стрима
+     * - Проверить VIDEO_ID в JavaScript постоянной страницы стрима канала
+     *
+     * @param array $channel
+     * @return boolean $isLive
+     */
     static function isLive($channel) {
         // Получить постоянную страницу стрима
         $liveStreamUrl = Youtube::getStaticURL($channel);
@@ -315,8 +401,8 @@ class Youtube {
     }
 
     /**
-     * Получить videoId стрима через channelId
-     * - Получить VIDEO_ID в скрипте js
+     * Получить id стрима
+     * - VIDEO_ID в скрипте js
      * 
      * @param array $channel
      * @return string $videoId
@@ -390,6 +476,14 @@ class Youtube {
 }
 
 class WASD {
+    /**
+     * Получить информацию о канале и стриме
+     * - 2 способа получения данных
+     * - @todo Второй способ, проработать streamId
+     *
+     * @param array $channel
+     * @return array $channel - Дополнительная информация
+     */
     static function getChannel($channel) {
         $channel['channelName'] = end(explode('/', $channel['url']));
 
@@ -406,7 +500,7 @@ class WASD {
             $channel['streamId'] = $apiInfo['media_container'] ? $apiInfo['media_container']['media_container_streams'][0]['stream_id'] : '';
             $channel['hlsUrl'] = $apiInfo['media_container'] ? $apiInfo['media_container']['media_container_streams'][0]['stream_media'][0]['media_meta']['media_url'] : '';
         } else {
-            // Альтернативно
+            // Альтернативный способ
             $channel['isLive'] = WASD::isLive($channel);
             $channel['streamId'] = WASD::getStreamId($channel);
             $channel['hlsUrl'] = $channel['isLive'] ? WASD::getHlsUrl($channel) : '';
@@ -420,6 +514,12 @@ class WASD {
         ];
     }
 
+    /**
+     * Проверить онлайн стрима
+     *
+     * @param array $channel
+     * @return boolean $isLive
+     */
     static function isLive($channel) {
         // Проверка через HLS
         $hlsUrl = WASD::getHlsUrl($channel);
@@ -454,6 +554,12 @@ class WASD {
         }
     }
 
+    /**
+     * Получить id стрима
+     *
+     * @param array $channel
+     * @return string $streamId
+     */
     static function getStreamId($channel) {
         $channel['channelName'] = end(explode('/', $channel['url']));
 
