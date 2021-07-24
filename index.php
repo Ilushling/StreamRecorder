@@ -357,7 +357,11 @@ class Youtube {
             // Если стрим есть, то VIDEO_ID содержит videoId стрима, равно live_stream
             $channel['isLive'] = isset($matches[1]) && $matches[1] !== 'live_stream';
             $channel['streamId'] = (isset($matches[1]) && $matches[1] !== 'live_stream') ? $matches[1] : '';
-            $channel['hlsUrl'] = $channel['isLive'] ? Youtube::getHlsUrl($channel) : '';
+            if ($channel['isLive']) {
+                // isLive = true даже если нет стрима, а только анонс стрима
+                $channel['hlsUrl'] = Youtube::getHlsUrl($channel);
+                $channel['isLive'] = (bool) $channel['hlsUrl'];
+            }
         } else {
             // Альтернативный способ
             $channel['isLive'] = Youtube::isLive($channel);
@@ -377,6 +381,7 @@ class Youtube {
     /**
      * Проверить онлайн стрима
      * - Проверить VIDEO_ID в JavaScript постоянной страницы стрима канала
+     * - isLive = true даже если нет стрима, а только анонс стрима
      *
      * @param array $channel
      * @return boolean $isLive
@@ -390,6 +395,11 @@ class Youtube {
             preg_match('/\"VIDEO_ID\":\"(.*?)\"/', $data, $matches);
             // Если стрим есть, то VIDEO_ID содержит videoId стрима, равно live_stream
             $isLive = isset($matches[1]) && $matches[1] !== 'live_stream';
+
+            if ($isLive) {
+                // isLive = true даже если нет стрима, а только анонс стрима
+                $isLive = (bool) Youtube::getHlsUrl($channel);
+            }
             return $isLive;
         } else {
             throw new Exception("Ошибка загрузки постоянной страницы стрима: {$liveStreamUrl}");
