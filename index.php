@@ -264,12 +264,12 @@ class Recorder {
     /**
      * Задать расширение файла
      * 
-     * - ts для потокового видео
+     * - mkv для потокового видео
      * - mp4 меньше весит
      * @return string $extension
      */
     static function getFileExtension() {
-        return 'ts';
+        return 'mkv';
     }
 
     /**
@@ -299,7 +299,8 @@ class Recorder {
      * @return string $command
      */
     static function recordToFile($filePath, $channel, $options = null) {
-        $ffmpegPath = implode(DIRECTORY_SEPARATOR, [__DIR__, 'ffmpeg', 'bin', 'ffmpeg.exe']);
+        // $ffmpegPath = implode(DIRECTORY_SEPARATOR, [__DIR__, 'ffmpeg', 'bin', 'ffmpeg.exe']);
+        $ffmpegPath = 'ffmpeg';
 
         // Настройки ffmpeg
         if (!$options) {
@@ -313,13 +314,14 @@ class Recorder {
                 '-c:v hevc_nvenc',       // Кодировать поток на NVENC (hevc_nvenc или h264_nvenc)
                 '-rc vbr',               // Переменный битрейт для -b и -maxrate
                 '-minrate 1M -b:v 2M -maxrate:v 6M -bufsize:v 8M', // Степень сжатия от 1МБ до 8МБ
-                //'-crf 16',             // Степень сжатия (14-17 хорошее качество)
+                // '-crf 16',               // Степень сжатия (14-17 хорошее качество)
                 //'-filter:v scale=1920x1080:flags=lanczos', // Ограничить разрешение
                 '-filter:v fps=fps=30',  // Ограничить до 30 кадров в секунду
                 '-preset fast',          // Качество сжатия
                 '-profile:v main',       // Поддержка телефонов
+                '-live_start_index 0',   // С начала
                 //'-tune ll',
-                '-movflags +faststart',  // Воспроизведение во время скачивания (перемещается moov атомы в начало файла)
+                // '-movflags +faststart',  // Воспроизведение во время скачивания (перемещается moov атомы в начало файла)
                 "\"{$filePath}\""
             ];
         }
@@ -373,7 +375,7 @@ class Youtube {
             'channelName' => $channel['channelName'],
             'isLive' => $channel['isLive'],
             'streamId' => $channel['streamId'],
-            'hlsUrl' => $channel['hlsUrl']
+            'hlsUrl' => $channel['hlsUrl'] ?? ''
         ];
     }
 
